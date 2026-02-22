@@ -1,13 +1,15 @@
-███████╗██╗     ██╗██╗  ██╗██████╗ ███████╗██╗     ██╗██╗  ██╗
-██╔════╝██║     ██║╚██╗██╔╝╚════██╗██╔════╝██║     ██║╚██╗██╔╝
-█████╗  ██║     ██║ ╚███╔╝  █████╔╝█████╗  ██║     ██║ ╚███╔╝ 
-██╔══╝  ██║     ██║ ██╔██╗ ██╔═══╝ ██╔══╝  ██║     ██║ ██╔██╗ 
-██║     ███████╗██║██╔╝ ██╗████████╗██║     ███████╗██║██╔╝ ██╗
-╚═╝     ╚══════╝╚═╝╚═╝  ╚═╝╚═══════╝╚═╝     ╚══════╝╚═╝╚═╝  ╚═╝
-                                                               
+# Flix2Flix
+
+
+		███████╗██╗     ██╗██╗  ██╗██████╗ ███████╗██╗     ██╗██╗  ██╗
+		██╔════╝██║     ██║╚██╗██╔╝╚════██╗██╔════╝██║     ██║╚██╗██╔╝
+		█████╗  ██║     ██║ ╚███╔╝  █████╔╝█████╗  ██║     ██║ ╚███╔╝ 
+		██╔══╝  ██║     ██║ ██╔██╗ ██╔═══╝ ██╔══╝  ██║     ██║ ██╔██╗ 
+		██║     ███████╗██║██╔╝ ██╗████████╗██║     ███████╗██║██╔╝ ██╗
+		╚═╝     ╚══════╝╚═╝╚═╝  ╚═╝╚═══════╝╚═╝     ╚══════╝╚═╝╚═╝  ╚═╝
+		                                                               
                  >> ACCOUNT MIGRATION TOOL <<
 
-# Flix2Flix
 ## Metflix My List Exporter & Viewer
 
 When migrating to a new Netflix account, there is no native way to transfer your "My List" (To-Watch list). This project solves that by parsing a locally saved HTML of your Netflix list, converting it into a structured CSV, and generating an interactive HTML viewer to track what you've watched and easily open titles in your new account.

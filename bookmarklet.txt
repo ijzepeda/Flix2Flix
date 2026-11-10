@@ -1,0 +1,13 @@
+# Flix2Flix - Bookmarklet (1 Clic)
+
+Guarda el siguiente código como la URL de un Marcador en tu navegador (Chrome, Brave, Safari, Edge):
+
+```javascript
+javascript:(async function(){console.log("Iniciando Flix2Flix...");const s=Array.from(document.querySelectorAll('section[data-uia^="carousel-row-section"],section.carousel-row'));const names=['my list','mi lista','minha lista','ma liste','meine liste'];let sec=s.find(sec=>{const h=sec.querySelector('h2');return h&&names.some(n=>h.textContent.toLowerCase().includes(n))})||s.find(sec=>sec.querySelector('a[data-uia="standard-card"],a[href*="jbv="]'))||document;const m=new Map();function get(){let c=0;sec.querySelectorAll('a[href*="jbv="],a[href*="/watch/"],a[href*="/title/"]').forEach(a=>{const h=a.getAttribute('href')||'';const id=(h.match(/jbv=(\d+)/)||h.match(/\/(?:watch|title)\/(\d+)/)||[])[1];if(!id)return;let t=(a.getAttribute('aria-label')||a.querySelector('img')?.getAttribute('alt')||'').trim()||('Netflix_'+id);if(!m.has(id)){m.set(id,{title:t,id:id,url:'https://www.netflix.com/title/'+id});c++}});return c;}get();const btn=sec.querySelector('button[data-uia="carousel-hawkins-right-button"],button[aria-label*="more titles"],button[aria-label*="más títulos"]');if(btn){let st=0,p=0;while(st<4&&p<120){p++;if(btn.getAttribute('aria-disabled')==='true'&&st>1)break;btn.click();await new Promise(r=>setTimeout(r,650));if(get()===0)st++;else st=0;}}const it=Array.from(m.values());if(!it.length){alert("No se encontraron títulos en Mi Lista.");return;}const csv=['"title","id","url","seen"'].concat(it.map(x=>`"${x.title.replace(/"/g,'""')}","${x.id}","${x.url}",""`)).join('\n');const b=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download='netflix_mylist.csv';document.body.appendChild(l);l.click();document.body.removeChild(l);URL.revokeObjectURL(u);alert("¡Éxito! Se descargaron "+it.length+" títulos en 'netflix_mylist.csv'.");})();
+```
+
+### ¿Cómo agregarlo a tus marcadores?
+1. Crea un nuevo marcador en tu navegador (por ejemplo, llamándolo "Exportar Netflix").
+2. En el campo "URL" o "Dirección", pega todo el bloque de arriba (empezando con `javascript:`).
+3. Entra a `https://www.netflix.com/browse/my-list` y haz clic en tu marcador. ¡Listo!
+

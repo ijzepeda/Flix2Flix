@@ -4,7 +4,11 @@
 import argparse, csv, json, re, webbrowser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, parse_qs, unquote
-from bs4 import BeautifulSoup
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
 
 # ---------- Parsing Helpers ----------
 def parse_ctx(raw_ctx: str) -> dict:
@@ -39,9 +43,17 @@ def get_title(anchor, ptrack_div):
 
 # ---------- Main HTML Parser ----------
 def parse_html_any(html_content: str, base_url="https://www.netflix.com") -> list:
+    if BeautifulSoup is None:
+        raise SystemExit(
+            "[ERROR] Se requiere la librería 'beautifulsoup4' para procesar archivos HTML.\n"
+            "Instálala con: pip install beautifulsoup4\n"
+            "Consejo: Si usaste el script de consola 'export_netflix_console.js', ya tienes 'netflix_mylist.csv'.\n"
+            "Simplemente ejecuta: python3 netflix_mylist_to_csv_and_viewer.py netflix_mylist.csv --open"
+        )
     soup = BeautifulSoup(html_content, "html.parser")
     items = []
     
+    # Strategy 1: Legacy Netflix DOM (data-ui-tracking-context)
     ptrack_divs = soup.find_all("div", attrs={"data-ui-tracking-context": True})
     for div in ptrack_divs:
         raw_ctx = div.get("data-ui-tracking-context", "")
@@ -64,8 +76,57 @@ def parse_html_any(html_content: str, base_url="https://www.netflix.com") -> lis
             "title": title,
             "id": video_id,
             "url": url_full,
-            "seen": "" # Default empty for new extractions
+            "seen": ""
         })
+
+    # Strategy 2: Modern Netflix UI (Virtualized carousel / My Netflix hub)
+    if not items:
+        # Find the "My List" / "Mi lista" section if available, else inspect whole document
+        sections = soup.find_all("section")
+        target_container = soup
+        list_keywords = ["my list", "mi lista", "minha lista", "ma liste", "meine liste"]
+        for sec in sections:
+            h2 = sec.find("h2")
+            if h2 and any(k in h2.get_text().strip().lower() for k in list_keywords):
+                target_container = sec
+                break
+
+        anchors = target_container.find_all("a", href=True)
+        seen_ids = set()
+        for a in anchors:
+            href = a.get("href", "")
+            video_id = ""
+            m_jbv = re.search(r"jbv=(\d+)", href)
+            m_path = re.search(r"/(?:watch|title)/(\d+)", href)
+            if m_jbv:
+                video_id = m_jbv.group(1)
+            elif m_path:
+                video_id = m_path.group(1)
+            
+            if not video_id or video_id in seen_ids:
+                continue
+            seen_ids.add(video_id)
+
+            title = (a.get("aria-label") or "").strip()
+            if not title:
+                img = a.find("img")
+                if img:
+                    title = (img.get("alt") or "").strip()
+            if not title:
+                fb = a.select_one(".fallback-text, p, span")
+                if fb:
+                    title = fb.get_text().strip()
+            if not title:
+                title = f"Netflix_{video_id}"
+
+            url_full = f"https://www.netflix.com/title/{video_id}"
+            items.append({
+                "title": title,
+                "id": video_id,
+                "url": url_full,
+                "seen": ""
+            })
+
     return items
 
 # ---------- CSV Readers/Writers ----------
@@ -241,10 +302,35 @@ def write_viewer_html(items: list, out_path: Path, page_title="Netflix My List �
     html_content = html_template.replace("__PAGE_TITLE__", page_title).replace("__ITEMS_JSON__", items_json)
     out_path.write_text(html_content, encoding="utf-8")
 
+def apply_viewing_history(items: list, history_csv_path: Path):
+    """Marks items as seen if found in Netflix's official ViewingActivity.csv."""
+    if not history_csv_path.exists():
+        print(f"[WARN] Viewing history file not found: {history_csv_path}")
+        return
+    history_titles = set()
+    with open(history_csv_path, "r", encoding="utf-8", errors="ignore") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            title = (row.get("Title") or row.get("title") or "").strip().lower()
+            if title:
+                history_titles.add(title)
+                # Also add base show name before colons (e.g., "Breaking Bad: Season 1" -> "breaking bad")
+                if ":" in title:
+                    history_titles.add(title.split(":")[0].strip())
+
+    marked = 0
+    for it in items:
+        item_title = (it.get("title") or "").strip().lower()
+        if item_title in history_titles or any(item_title in ht or ht in item_title for ht in history_titles):
+            it["seen"] = "1"
+            marked += 1
+    print(f"[INFO] Cross-referenced viewing history: {marked} titles marked as seen.")
+
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("html_file", nargs="?", type=Path, help="HTML from 'My List'")
+    ap = argparse.ArgumentParser(description="Flix2Flix - Netflix List Exporter & Viewer")
+    ap.add_argument("input_file", nargs="?", type=Path, help="HTML file or CSV file with Netflix list")
     ap.add_argument("--csv-in", type=Path, help="Build viewer directly from CSV")
+    ap.add_argument("--history-in", type=Path, help="Official NetflixViewingHistory.csv to mark seen titles")
     ap.add_argument("--out", type=Path, default=Path("netflix_mylist.csv"))
     ap.add_argument("--viewer-out", type=Path, default=Path("index.html")) # Default for GitHub Pages
     ap.add_argument("--base-url", default="https://www.netflix.com")
@@ -252,14 +338,36 @@ if __name__ == "__main__":
     ap.add_argument("--open", action="store_true")
     args = ap.parse_args()
 
-    if args.csv_in:
-        items = read_items_from_csv(args.csv_in)
-    else:
-        if not args.html_file:
-            raise SystemExit("Pass an HTML file or use --csv-in.")
-        html = args.html_file.read_text(encoding="utf-8", errors="ignore")
-        items = parse_html_any(html, base_url=args.base_url)
+    items = []
+    
+    # 1. Determine input source (explicit --csv-in or positional input_file)
+    target_csv = args.csv_in
+    if not target_csv and args.input_file and args.input_file.suffix.lower() == ".csv":
+        target_csv = args.input_file
 
+    if target_csv:
+        if not target_csv.exists():
+            raise SystemExit(f"CSV file not found: {target_csv}")
+        items = read_items_from_csv(target_csv)
+    elif args.input_file:
+        if not args.input_file.exists():
+            raise SystemExit(f"Input file not found: {args.input_file}")
+        html = args.input_file.read_text(encoding="utf-8", errors="ignore")
+        items = parse_html_any(html, base_url=args.base_url)
+    else:
+        # Default fallback: check if netflix_mylist.csv exists in current folder
+        default_csv = Path("netflix_mylist.csv")
+        if default_csv.exists():
+            print(f"[INFO] No input specified, using existing '{default_csv}'...")
+            items = read_items_from_csv(default_csv)
+        else:
+            raise SystemExit("Pass an HTML/CSV file or use --csv-in.")
+
+    # 2. Cross-reference with viewing activity if provided
+    if args.history_in:
+        apply_viewing_history(items, args.history_in)
+
+    # 3. Deduplicate by video ID
     if args.dedupe:
         seen, deduped = set(), []
         for it in items:
@@ -268,11 +376,14 @@ if __name__ == "__main__":
                 seen.add(key); deduped.append(it)
         items = deduped
 
-    write_csv(items, args.out)
+    # Only write CSV if input was HTML, or if explicitly requested/modified
+    if not target_csv or args.history_in or args.dedupe:
+        write_csv(items, args.out)
+        print(f" -> CSV saved to {args.out}")
+
     write_viewer_html(items, args.viewer_out)
 
     print(f"[OK] {len(items)} items processed.")
-    print(f" -> CSV saved to {args.out}")
     print(f" -> Viewer saved to {args.viewer_out}")
 
     if args.open:

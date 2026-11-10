@@ -24,11 +24,22 @@ Al hacer scroll lateral, Netflix desmonta ("borra") los elementos que salen de l
 ---
 
 ## Características
+- **Centro de Control Todo en Uno (`index.html`):** Gestiona las 4 tareas directamente desde el visor web sin tener que abrir archivos de código ni memorizar comandos.
 - **Auto-Extractor de Carrusel:** Recorre de forma automática el carrusel horizontal virtualizado de Netflix en 5 segundos y descarga directamente `netflix_mylist.csv`.
-- **Visor Interactivo:** Genera una página web moderna (`index.html`) para visualizar y filtrar tu lista.
-- **Seguimiento ("Visto"):** Marca los títulos que ya viste.
-- **Cruce con Historial Oficial:** Soporta cruzar con tu `NetflixViewingHistory.csv` oficial de Netflix para marcar automáticamente lo ya visto.
-- **Importador a Cuenta Nueva:** Script de JavaScript para importar todos tus títulos a tu nueva cuenta automáticamente.
+- **Fusión en el Navegador o Terminal:** Arrastra tu nuevo CSV directamente a `index.html` para actualizar tu lista en vivo sin salir del navegador, o usa `python3 2-merge_csv.py`.
+- **Seguimiento ("Visto"):** Marca los títulos que ya viste y consérvalos entre respaldos.
+- **Caché Local de Portadas:** Descarga carátulas a `./imagenes/` para usar tu catálogo 100% offline.
+- **Importador Seguro Anti-Bloqueo:** Copia el script de importación con tus IDs pendientes ya inyectados para sincronizarlos en tu nueva cuenta con ritmo humano.
+
+---
+
+## 🌟 Solución Todo en Uno desde `index.html`
+Solo abre [`index.html`](index.html) en tu navegador y haz clic en el botón rojo superior **`[ 🛠️ Tareas (1-2-3-4) ]`**. Se abrirá el panel interactivo con las 4 tareas accesibles con 1 clic:
+
+1. **📥 1. Exportar:** Botón para copiar el script extractor al portapapeles y enlace directo a Netflix.
+2. **🔄 2. Fusionar:** Zona drag-and-drop para arrastrar tu nuevo `netflix_mylist.csv` y fusionarlo en vivo en pantalla.
+3. **🖼️ 3. Caché Portadas:** Estado de imágenes y comando para guardarlas offline.
+4. **🚀 4. Importar:** Botón que genera y copia el script importador con tus IDs pendientes ya incrustados listo para pegar en tu nueva cuenta.
 
 ---
 

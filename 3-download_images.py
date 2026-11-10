@@ -22,6 +22,7 @@ import urllib.error
 import urllib.request
 
 from netflix_mylist_to_csv_and_viewer_spanish import (
+    CSV_FIELDS,
     read_items_from_csv,
     write_viewer_html,
 )
@@ -34,13 +35,11 @@ USER_AGENT = (
 
 def build_image_map_from_sources() -> dict:
     """
-    Escanea todos los CSV disponibles para obtener la mejor URL de portada para cada ID.
+    Escanea CSVs en el directorio actual y en BACKUPS/ para recolectar
+    cualquier URL de portada conocida previamente.
     """
     image_map = {}
-    sources = [
-        Path("netflix_mylist_actualizado.csv"),
-        Path("netflix_mylist.csv"),
-    ]
+    sources = [Path("netflix_mylist_actualizado.csv"), Path("netflix_mylist.csv")]
     backups = Path("BACKUPS")
     if backups.exists():
         sources.extend(sorted(backups.glob("*.csv"), reverse=True))
@@ -61,46 +60,97 @@ def build_image_map_from_sources() -> dict:
             continue
     return image_map
 
+def fetch_netflix_og_image(vid: str, timeout: int = 8) -> str:
+    """
+    Consulta la página pública del título en Netflix (netflix.com/title/<id>)
+    para extraer la URL oficial de la portada desde la etiqueta meta og:image.
+    """
+    url = f"https://www.netflix.com/title/{vid}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+            import re
+            m = re.search(r'<meta\s+property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', html)
+            if not m:
+                m = re.search(r'<meta\s+content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', html)
+            if not m:
+                m = re.search(r'https://occ-0-[^\s"\'<>]+\.(?:jpg|webp)', html)
+            if m:
+                res = m.group(1) if hasattr(m, 'group') and m.groups() else m.group(0)
+                return res.strip()
+    except Exception:
+        pass
+    return ""
+
 def download_single_image(vid: str, img_url: str, title: str, out_dir: Path, timeout: int = 10) -> tuple:
     """
-    Descarga una imagen individual y la guarda como <out_dir>/<vid>.<ext>
+    Descarga una imagen individual y la guarda como <out_dir>/<vid>.<ext>.
+    Si la URL está vacía o falla, intenta resolverla dinámicamente vía fetch_netflix_og_image.
     """
-    # Si ya existe con cualquier extensión conocida, omitir
+    # 1. Si ya existe en disco, omitir
     for ext in (".jpg", ".webp", ".png", ".jpeg"):
         dest = out_dir / f"{vid}{ext}"
         if dest.exists() and dest.stat().st_size > 500:
-            return vid, "already_exists", dest
+            return vid, "already_exists", dest, img_url
 
-    req = urllib.request.Request(
-        img_url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            "Referer": "",  # Sin referer para evitar 403 de Netflix CDN
-        }
-    )
+    # 2. Si no tiene URL, intentar resolverla vía og:image de Netflix
+    current_url = img_url
+    if not current_url:
+        current_url = fetch_netflix_og_image(vid, timeout=timeout)
+        if not current_url:
+            return vid, "no_url_found", None, ""
 
-    try:
+    def _fetch_file(u):
+        req = urllib.request.Request(
+            u,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": "",
+            }
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             content_type = resp.headers.get("Content-Type", "").lower()
-            if "webp" in content_type or ".webp" in img_url.lower():
+            if "webp" in content_type or ".webp" in u.lower():
                 ext = ".webp"
-            elif "png" in content_type or ".png" in img_url.lower():
+            elif "png" in content_type or ".png" in u.lower():
                 ext = ".png"
             else:
                 ext = ".jpg"
-
-            dest = out_dir / f"{vid}{ext}"
             data = resp.read()
-            if len(data) < 200:
-                return vid, "too_small", None
+            return data, ext
 
-            dest.write_bytes(data)
-            return vid, "downloaded", dest
+    # 3. Intentar descarga
+    try:
+        data, ext = _fetch_file(current_url)
     except urllib.error.HTTPError as e:
-        return vid, f"http_{e.code}", None
+        # Si falló con 403 o 404 y era una URL antigua de la base, intentar obtener una fresca vía og:image
+        fresh_url = fetch_netflix_og_image(vid, timeout=timeout)
+        if fresh_url and fresh_url != current_url:
+            try:
+                data, ext = _fetch_file(fresh_url)
+                current_url = fresh_url
+            except Exception as e2:
+                return vid, f"retry_error_{e2}", None, ""
+        else:
+            return vid, f"http_{e.code}", None, ""
     except Exception as e:
-        return vid, f"error_{str(e)[:30]}", None
+        return vid, f"error_{str(e)[:30]}", None, ""
+
+    if len(data) < 200:
+        return vid, "too_small", None, ""
+
+    dest = out_dir / f"{vid}{ext}"
+    dest.write_bytes(data)
+    return vid, "downloaded", dest, current_url
 
 def main():
     parser = argparse.ArgumentParser(description="Flix2Flix: Descargar portadas de Netflix a ./imagenes/")
@@ -152,7 +202,7 @@ def main():
         if cached:
             continue
 
-        # Obtener URL
+        # Obtener URL (o dejar vacía para resolución automática vía og:image de Netflix)
         img_url = str(it.get("image_url") or it.get("image") or "").strip()
         title = str(it.get("titulo") or it.get("title") or "").strip()
         if not img_url and vid in image_map:
@@ -160,26 +210,22 @@ def main():
             if not title:
                 title = image_map[vid]["title"]
 
-        if img_url:
-            to_download.append((vid, img_url, title))
-        else:
-            missing_url += 1
+        to_download.append((vid, img_url, title))
 
     total_items = len(items)
     print(f"\n📊 Estado inicial:")
     print(f"- Total de títulos en tu lista: {total_items}")
     print(f"- Ya descargadas en caché:      {already_cached}")
-    print(f"- Pendientes por descargar:     {len(to_download)}")
-    if missing_url > 0:
-        print(f"- Sin URL de portada:           {missing_url} (se mostrarán con póster temático 🍿)")
+    print(f"- Pendientes por procesar:      {len(to_download)}")
 
     if not to_download:
         print("\n✅ ¡Todas las imágenes disponibles ya están descargadas en ./imagenes/!")
     else:
-        print(f"\n🚀 Iniciando descarga de {len(to_download)} portadas (concurrencia: {args.concurrency})...\n")
+        print(f"\n🚀 Iniciando descarga/resolución de {len(to_download)} portadas (concurrencia: {args.concurrency})...\n")
 
         downloaded = 0
         failed = 0
+        updated_urls = {}
         lock = threading.Lock()
         start_time = time.time()
 
@@ -192,18 +238,20 @@ def main():
             for idx, future in enumerate(as_completed(futures), 1):
                 vid, title = futures[future]
                 try:
-                    _, status, dest = future.result()
+                    _, status, dest, final_url = future.result()
                     with lock:
                         pct = int((idx / len(to_download)) * 100)
                         if status == "downloaded":
                             downloaded += 1
                             display_title = (title[:30] + "..") if len(title) > 30 else title
                             print(f"[{idx}/{len(to_download)}] ({pct}%) ✅ {display_title}")
+                            if final_url:
+                                updated_urls[vid] = final_url
                         elif status == "already_exists":
                             already_cached += 1
                         else:
                             failed += 1
-                            print(f"[{idx}/{len(to_download)}] ({pct}%) ⚠️ Error en {vid} ({title}): {status}")
+                            print(f"[{idx}/{len(to_download)}] ({pct}%) ⚠️ Sin portada para {vid} ({title})")
                 except Exception as e:
                     with lock:
                         failed += 1
@@ -216,6 +264,18 @@ def main():
         print(f"- Fallidas / No disponibles:  {failed}")
         print(f"- Tiempo total transcurrido:  {elapsed:.1f} segundos")
         print("=" * 60)
+
+        if updated_urls:
+            print(f"\n💾 Guardando {len(updated_urls)} nuevas URLs de portada en {csv_path.name}...")
+            for it in items:
+                v = str(it.get("id") or "").strip()
+                if v in updated_urls and not it.get("image_url"):
+                    it["image_url"] = updated_urls[v]
+
+            with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(items)
 
     # Regenerar index.html para reflejar las portadas locales inmediatamente
     if not args.no_viewer_update:

@@ -95,6 +95,29 @@
 
         const titlesMap = new Map();
 
+        function extractImageUrl(anchor, videoId) {
+            try {
+                const fc = window.netflix?.falcorCache;
+                if (fc && fc.videos && fc.videos[videoId]) {
+                    const v = fc.videos[videoId];
+                    const b = v.boxArt || v.boxart;
+                    if (b?.value?.url) return b.value.url;
+                    if (typeof b?.url === 'string') return b.url;
+                }
+            } catch (e) {}
+
+            let img = anchor.querySelector('img');
+            if (!img) {
+                const card = anchor.closest('[data-uia*="card"], .slider-item, div[class*="cache-1tbetht"]') || anchor.parentElement;
+                if (card) img = card.querySelector('img');
+            }
+            if (img) {
+                const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+                if (src && !src.startsWith('data:') && !src.includes('placeholder')) return src;
+            }
+            return '';
+        }
+
         function harvest() {
             const anchors = targetSection.querySelectorAll('a[href*="jbv="], a[href*="/watch/"], a[href*="/title/"]');
             let added = 0;
@@ -108,24 +131,26 @@
                 if (!videoId) return;
 
                 let title = (a.getAttribute('aria-label') || '').trim();
-                    let imageUrl = '';
-                    const img = a.querySelector('img');
-                    if (img) {
-                        if (!title) title = (img.getAttribute('alt') || '').trim();
-                        imageUrl = img.currentSrc || img.src || '';
-                    }
-                    if (!title) title = `Netflix_${videoId}`;
+                const img = a.querySelector('img');
+                if (img && !title) title = (img.getAttribute('alt') || '').trim();
+                if (!title) title = `Netflix_${videoId}`;
 
-                    if (!titlesMap.has(videoId)) {
-                        titlesMap.set(videoId, {
-                            title: title,
-                            id: videoId,
+                const imageUrl = extractImageUrl(a, videoId);
+
+                if (titlesMap.has(videoId)) {
+                    const existing = titlesMap.get(videoId);
+                    if (!existing.image_url && imageUrl) existing.image_url = imageUrl;
+                    if ((!existing.title || existing.title.startsWith('Netflix_')) && title && !title.startsWith('Netflix_')) existing.title = title;
+                } else {
+                    titlesMap.set(videoId, {
+                        title: title,
+                        id: videoId,
                         url: `https://www.netflix.com/title/${videoId}`,
-                            image_url: imageUrl
-                        });
-                        added++;
-                    }
-                });
+                        image_url: imageUrl
+                    });
+                    added++;
+                }
+            });
             return added;
         }
 

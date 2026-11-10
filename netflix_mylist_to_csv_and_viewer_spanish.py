@@ -175,6 +175,31 @@ def _derive_base(url_str, default="https://www.netflix.com"):
     return default
 
 def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
+    # Cargar scripts para integrarlos en el Hub Todo en Uno
+    export_script = ""
+    for cand in ("1-export_netflix_console.js", "export_netflix_console.js"):
+        p = Path(cand)
+        if p.exists():
+            export_script = p.read_text(encoding="utf-8")
+            break
+
+    import_script = ""
+    for cand in ("4-import_netflix_console.js", "import_netflix_console.js"):
+        p = Path(cand)
+        if p.exists():
+            import_script = p.read_text(encoding="utf-8")
+            break
+
+    bookmarklet_url = ""
+    for cand in ("1-bookmarklet.txt", "bookmarklet.txt"):
+        p = Path(cand)
+        if p.exists():
+            txt = p.read_text(encoding="utf-8")
+            m = re.search(r"javascript:(?:.*?)(?=\n```|$)", txt, re.DOTALL)
+            if m:
+                bookmarklet_url = "javascript:" + m.group(0).replace("javascript:", "").strip()
+            break
+
     # Render cards (incluye poster, placeholder, checkbox visto y botones)
     card_parts = []
     for it in items:
@@ -285,6 +310,124 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
   .btn-action:hover { background:#1b2842; }
   .btn-export-highlight { background:#2563eb; border-color:#3b82f6; color:#fff; }
   .btn-export-highlight:hover { background:#1d4ed8; }
+  .btn-hub-highlight { background: linear-gradient(135deg, #e50914, #b91c1c); border-color: #ef4444; color: #fff; font-weight: 700; box-shadow: 0 2px 10px rgba(229,9,20,0.35); }
+  .btn-hub-highlight:hover { background: linear-gradient(135deg, #f40612, #dc2626); }
+
+  /* Hub Dialog Modal */
+  .hub-dialog {
+    background: #0f1422;
+    color: var(--text);
+    border: 1px solid #2a3854;
+    border-radius: 16px;
+    padding: 0;
+    max-width: 820px;
+    width: 94vw;
+    max-height: 90vh;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229,9,20,0.15);
+    outline: none;
+    overflow: hidden;
+  }
+  .hub-dialog::backdrop {
+    background: rgba(5, 7, 13, 0.8);
+    backdrop-filter: blur(8px);
+  }
+  .hub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 22px;
+    background: #141c2e;
+    border-bottom: 1px solid #222e47;
+  }
+  .hub-header h2 { margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: #fff; }
+  .hub-header .hub-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .btn-close-dialog { background: #1c263d; border: 1px solid #2d3b5b; color: var(--muted); border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+  .btn-close-dialog:hover { background: #e50914; color: #fff; border-color: #e50914; }
+
+  .hub-tabs {
+    display: flex;
+    background: #0d121f;
+    border-bottom: 1px solid #222e47;
+    padding: 0 16px;
+    overflow-x: auto;
+  }
+  .hub-tab-btn {
+    padding: 12px 18px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .2s;
+    white-space: nowrap;
+  }
+  .hub-tab-btn:hover { color: #fff; }
+  .hub-tab-btn.active { color: #e50914; border-bottom-color: #e50914; }
+
+  .hub-body {
+    padding: 22px;
+    max-height: calc(90vh - 140px);
+    overflow-y: auto;
+  }
+  .hub-panel { display: none; }
+  .hub-panel.active { display: block; animation: fadeIn .2s; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .task-card {
+    background: #151d2f;
+    border: 1px solid #25334e;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .task-card h3 { margin: 0 0 8px 0; font-size: 15px; color: #f1f5f9; display: flex; align-items: center; gap: 8px; }
+  .task-card p { margin: 0 0 14px 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  .code-pill {
+    background: #0a0e18;
+    border: 1px solid #25334e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #38bdf8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .drop-zone {
+    border: 2px dashed #2a3a5a;
+    border-radius: 12px;
+    padding: 28px 16px;
+    text-align: center;
+    background: #0c111d;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: #3b82f6;
+    background: #111a2e;
+  }
+
+  .bookmarklet-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: #e50914;
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 12px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(229,9,20,0.4);
+    cursor: grab;
+  }
 
   .grid { display:grid; gap:14px; grid-template-columns: repeat(6, minmax(0,1fr)); padding-bottom:40px; }
   @media (max-width:1200px) { .grid { grid-template-columns: repeat(5,1fr); } }
@@ -366,7 +509,8 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
       </div>
 
       <div class="action-buttons">
-        <button id="btnCopyIds" class="btn-action" title="Copia los IDs de los títulos pendientes para importar en tu nueva cuenta">📋 Copiar IDs para Importar</button>
+        <button id="btnOpenHub" type="button" class="btn-action btn-hub-highlight" title="Centro de Tareas Todo en Uno (1, 2, 3 y 4)">🛠️ Tareas (1-2-3-4)</button>
+        <button id="btnCopyIds" class="btn-action" title="Copia los IDs de los títulos pendientes para importar en tu nueva cuenta">📋 Copiar IDs</button>
         <button id="btnExport" class="btn-action btn-export-highlight">💾 Exportar CSV</button>
       </div>
     </div>
@@ -377,10 +521,139 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
   </section>
 </main>
 
+<dialog id="hubDialog" class="hub-dialog">
+  <div class="hub-header">
+    <div>
+      <h2>🎬 Flix2Flix: Centro de Control Todo en Uno</h2>
+      <div class="hub-sub">Ejecuta y gestiona tus 4 tareas de migración desde este mismo visor</div>
+    </div>
+    <button type="button" class="btn-close-dialog" id="btnCloseHub" aria-label="Cerrar">✕</button>
+  </div>
+
+  <div class="hub-tabs">
+    <button type="button" class="hub-tab-btn active" data-target="panelTab1">📥 1. Exportar</button>
+    <button type="button" class="hub-tab-btn" data-target="panelTab2">🔄 2. Fusionar CSV</button>
+    <button type="button" class="hub-tab-btn" data-target="panelTab3">🖼️ 3. Caché Portadas</button>
+    <button type="button" class="hub-tab-btn" data-target="panelTab4">🚀 4. Importar Cuenta Nueva</button>
+  </div>
+
+  <div class="hub-body">
+    <!-- PANEL 1: EXPORTAR -->
+    <div id="panelTab1" class="hub-panel active">
+      <div class="task-card">
+        <h3><span>⚡</span> Opción A: Script de Consola (Recomendado)</h3>
+        <p>Avanza el carrusel horizontal de Netflix de forma automática y descarga <code>netflix_mylist.csv</code> en 5 segundos sin instalar nada.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+          <button type="button" class="btn btn-primary" id="btnCopyExtractor" style="font-size:13px; padding:9px 16px;">📋 Copiar Script Extractor (1 Clic)</button>
+          <a href="https://www.netflix.com/browse/my-list" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="font-size:13px; padding:9px 16px;">↗️ Ir a Netflix Mi Lista</a>
+        </div>
+        <ol style="margin:0; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6;">
+          <li>Haz clic en <strong>"Copiar Script Extractor"</strong>.</li>
+          <li>Abre tu cuenta vieja de Netflix en <strong>netflix.com/browse/my-list</strong>.</li>
+          <li>Abre la consola (<code>Cmd+Option+J</code> en Mac / <code>Ctrl+Shift+J</code> en Windows), pega (<code>Cmd+V</code>) y presiona <code>Enter</code>.</li>
+        </ol>
+      </div>
+
+      <div class="task-card">
+        <h3><span>⭐</span> Opción B: Marcador de 1 Clic (Bookmarklet)</h3>
+        <p>Arrastra este botón a tu barra de favoritos/marcadores del navegador. Al estar en Netflix, solo haz un clic sobre él.</p>
+        <div>
+          <a class="bookmarklet-pill" href="__BOOKMARKLET_URL__" onclick="alert('¡Arrastra este botón a tu barra de marcadores/favoritos del navegador!'); return false;">⭐ Exportar Netflix</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 2: FUSIONAR CSV -->
+    <div id="panelTab2" class="hub-panel">
+      <div class="task-card">
+        <h3><span>📥</span> Fusión Directa en este Visor (Sin Terminal)</h3>
+        <p>Arrastra aquí el archivo <code>netflix_mylist.csv</code> recién descargado. Se incorporarán los títulos nuevos de inmediato en esta misma pantalla conservando tus vistos.</p>
+        
+        <div class="drop-zone" id="csvDropZone">
+          <div style="font-size:32px; margin-bottom:6px;">📥</div>
+          <div style="font-weight:700; font-size:14px; color:#f1f5f9;">Arrastra aquí tu nuevo CSV descargado</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:4px;">o haz clic aquí para examinar tus archivos</div>
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none">
+        </div>
+
+        <div id="hubMergeStatus" style="display:none; margin-top:14px; background:#064e3b; border:1px solid #059669; border-radius:8px; padding:12px; font-size:13px; color:#a7f3d0;">
+          <div id="hubMergeSummary"></div>
+          <div style="margin-top:10px;">
+            <button type="button" class="btn btn-export-highlight" id="btnDownloadMergedCsv">💾 Descargar CSV Actualizado</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-card">
+        <h3><span>💻</span> Alternativa por Terminal (Python)</h3>
+        <p>Si prefieres ejecutar la fusión desde la terminal:</p>
+        <div class="code-pill">
+          <span>python3 2-merge_csv.py</span>
+          <button type="button" class="btn btn-secondary" id="btnCopyMergeCmd" style="padding:4px 8px; font-size:11px;">📋 Copiar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 3: CACHE DE IMÁGENES -->
+    <div id="panelTab3" class="hub-panel">
+      <div class="task-card">
+        <h3><span>🖼️</span> Estado de Portadas</h3>
+        <p>Descarga las carátulas en tu disco local (<code>./imagenes/</code>) para que tu lista cargue al instante y funcione <strong>100% offline (sin internet)</strong>.</p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+          <span class="stat-pill"><strong id="hubImgCount">0</strong> con portada oficial</span>
+          <span class="stat-pill stat-seen">Modo híbrido (Local + CDN)</span>
+        </div>
+        <div class="code-pill">
+          <span>python3 3-download_images.py</span>
+          <button type="button" class="btn btn-secondary" id="btnCopyDownloadCmd" style="padding:4px 8px; font-size:11px;">📋 Copiar Comando</button>
+        </div>
+        <div style="font-size:12px; color:var(--muted); line-height:1.5;">
+          ℹ️ Este comando descargará las imágenes a la carpeta <code>./imagenes/</code> a máxima velocidad con múltiples conexiones simultáneas y regenerará este visor automáticamente.
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 4: IMPORTAR A NUEVA CUENTA -->
+    <div id="panelTab4" class="hub-panel">
+      <div class="task-card">
+        <h3><span>🚀</span> Sincronizador Automatizado Anti-Bloqueo</h3>
+        <p>Genera y copia el script con tus títulos ya incorporados para ejecutarlos en tu nueva cuenta de Netflix con ritmo humano de seguridad.</p>
+
+        <div style="margin-bottom:16px; background:#0b0f19; border:1px solid #23304a; border-radius:10px; padding:12px;">
+          <div style="font-weight:700; margin-bottom:8px; font-size:13px; color:#cbd5e1;">¿Qué títulos deseas importar?</div>
+          <label style="display:block; margin-bottom:6px; cursor:pointer; font-size:13px;">
+            <input type="radio" name="importScope" value="pending" checked style="accent-color:var(--accent);">
+            <strong>Solo títulos pendientes</strong> (<span id="hubPendingCount">0</span> títulos) <span style="color:#22c55e;">[Recomendado]</span>
+          </label>
+          <label style="display:block; cursor:pointer; font-size:13px;">
+            <input type="radio" name="importScope" value="all" style="accent-color:var(--accent);">
+            <strong>Toda mi lista completa</strong> (<span id="hubTotalCount">0</span> títulos)
+          </label>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+          <button type="button" class="btn btn-primary" id="btnCopyImporter" style="font-size:13px; padding:10px 18px; font-weight:700;">🚀 Copiar Script con mis IDs (1 Clic)</button>
+          <a href="https://www.netflix.com/browse" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="font-size:13px; padding:10px 18px;">↗️ Abrir Netflix en Cuenta Nueva</a>
+        </div>
+
+        <ol style="margin:0; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6;">
+          <li>Haz clic en <strong>"Copiar Script con mis IDs"</strong> (ya tiene tus títulos incrustados).</li>
+          <li>Inicia sesión en tu <strong>cuenta nueva de Netflix</strong> en el navegador.</li>
+          <li>Abre la consola (<code>Cmd+Option+J</code> / <code>Ctrl+Shift+J</code>), pega (<code>Cmd+V</code>) y presiona <code>Enter</code>.</li>
+          <li>Aparecerá un panel flotante en Netflix que irá agregando cada título con barra de progreso en vivo y botones de pausa.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast">Copiado al portapapeles</div>
 
 <script>
 (function(){
+  const SCRIPT_EXPORT = __SCRIPT_EXPORT_JSON__;
+  const SCRIPT_IMPORT = __SCRIPT_IMPORT_JSON__;
+
   const grid = document.getElementById('grid');
   const sortSel = document.getElementById('sort');
   const searchInput = document.getElementById('searchInput');
@@ -408,7 +681,81 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
 
   const seenMap = loadSeenMap();
 
-  // Inicializar checkboxes y listeners
+  // Helper para construir tarjetas dinámicas (fusión en navegador)
+  function createCardElement(item) {
+    const card = document.createElement('div');
+    const title = item.title || '(sin título)';
+    const id = item.id || '';
+    const img = item.img || '';
+    const visto = item.visto ? 'true' : 'false';
+
+    card.className = 'card' + (visto === 'true' ? ' seen-card' : '');
+    card.dataset.title = title;
+    card.dataset.id = id;
+    card.dataset.seen = visto;
+    card.dataset.img = img;
+    card.dataset.rank = '999999';
+
+    const watchUrl = `https://www.netflix.com/watch/${id}`;
+    const titleUrl = `https://www.netflix.com/title/${id}`;
+
+    let posterHtml = '';
+    if (img) {
+      posterHtml = `
+        <img class="poster" src="${img}" alt="${title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="poster-placeholder" style="display:none;"><span class="placeholder-icon">🎬</span><span class="placeholder-title">${title}</span></div>
+      `;
+    } else {
+      posterHtml = `<div class="poster-placeholder"><span class="placeholder-icon">🍿</span><span class="placeholder-title">${title}</span></div>`;
+    }
+
+    card.innerHTML = `
+      <div class="poster-container">${posterHtml}</div>
+      <div class="card-body">
+        <div class="title" title="${title}">${title}</div>
+        <div class="idline">ID: ${id}</div>
+        <label class="seen"><input type="checkbox" class="chk-seen" ${visto === 'true' ? 'checked' : ''}> Visto</label>
+        <div class="row-actions">
+          <a class="btn btn-secondary btn-title" href="${titleUrl}" target="_blank" rel="noopener noreferrer" title="Ficha en Netflix">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="ext-icon"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"></path><path d="M5 5h6v2H7v10h10v-4h2v6H5z"></path></svg>
+          </a>
+          <a class="btn btn-primary btn-watch" href="${watchUrl}" target="_blank" rel="noopener noreferrer">Ver</a>
+        </div>
+      </div>
+    `;
+
+    const chk = card.querySelector('.chk-seen');
+    chk.addEventListener('change', () => {
+      if (chk.checked) {
+        seenMap[id] = true;
+        card.classList.add('seen-card');
+        card.dataset.seen = "true";
+      } else {
+        delete seenMap[id];
+        card.classList.remove('seen-card');
+        card.dataset.seen = "false";
+      }
+      saveSeenMap(seenMap);
+      updateCounters();
+      applyFilters();
+    });
+
+    card.querySelectorAll('.btn-watch, .btn-title').forEach(a => {
+      a.addEventListener('click', () => {
+        chk.checked = true;
+        seenMap[id] = true;
+        card.classList.add('seen-card');
+        card.dataset.seen = "true";
+        saveSeenMap(seenMap);
+        updateCounters();
+        applyFilters();
+      });
+    });
+
+    return card;
+  }
+
+  // Inicializar checkboxes y listeners en tarjetas iniciales
   const allCards = Array.from(grid.querySelectorAll('.card'));
   
   allCards.forEach(card => {
@@ -416,7 +763,6 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
     const chk = card.querySelector('.chk-seen');
     if (!id || !chk) return;
 
-    // Si ya venía marcado en el CSV (dataset.seen="true") o en localStorage
     if (seenMap[id] !== undefined) {
       chk.checked = !!seenMap[id];
     } else if (card.dataset.seen === "true") {
@@ -473,6 +819,16 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
     document.getElementById('pillAll').textContent = total;
     document.getElementById('pillSeen').textContent = seen;
     document.getElementById('pillPending').textContent = pending;
+
+    const hubPending = document.getElementById('hubPendingCount');
+    const hubTotal = document.getElementById('hubTotalCount');
+    const hubImg = document.getElementById('hubImgCount');
+    if (hubPending) hubPending.textContent = pending;
+    if (hubTotal) hubTotal.textContent = total;
+    if (hubImg) {
+      const withImg = allCards.filter(c => c.dataset.img && c.dataset.img.trim()).length;
+      hubImg.textContent = withImg;
+    }
   }
 
   // Filtrado y búsqueda
@@ -523,11 +879,9 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
 
   // Copiar IDs al portapapeles
   btnCopyIds.addEventListener('click', async () => {
-    // Tomar solo los visibles o los pendientes
     const ids = [];
     allCards.forEach(card => {
       const chk = card.querySelector('.chk-seen');
-      // Si el filtro actual es 'all' o 'pending', copiamos pendientes. Si es 'seen', copiamos vistos.
       if (currentFilter === 'seen') {
         if (chk && chk.checked) ids.push(card.dataset.id);
       } else {
@@ -568,6 +922,185 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
     showToast("💾 CSV descargado correctamente");
   });
 
+  // ========== CONTROLADOR DEL HUB TODO EN UNO ==========
+  const hubDialog = document.getElementById('hubDialog');
+  const btnOpenHub = document.getElementById('btnOpenHub');
+  const btnCloseHub = document.getElementById('btnCloseHub');
+
+  if (btnOpenHub && hubDialog) {
+    btnOpenHub.addEventListener('click', () => {
+      updateCounters();
+      hubDialog.showModal();
+    });
+  }
+  if (btnCloseHub && hubDialog) {
+    btnCloseHub.addEventListener('click', () => hubDialog.close());
+    hubDialog.addEventListener('click', (e) => {
+      if (e.target === hubDialog) hubDialog.close();
+    });
+  }
+
+  // Pestañas del Hub
+  document.querySelectorAll('.hub-tab-btn').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.hub-tab-btn').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.hub-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const target = document.getElementById(tab.dataset.target);
+      if (target) target.classList.add('active');
+    });
+  });
+
+  // Tarea 1: Copiar Extractor
+  document.getElementById('btnCopyExtractor')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(SCRIPT_EXPORT);
+      showToast("📋 ¡Script Extractor copiado al portapapeles!");
+    } catch(e) {
+      prompt("Copia el script manualmente:", SCRIPT_EXPORT);
+    }
+  });
+
+  // Tarea 2: Fusión de CSV en navegador
+  const dropZone = document.getElementById('csvDropZone');
+  const fileInput = document.getElementById('csvFileInput');
+  if (dropZone && fileInput) {
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) handleCsvFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) handleCsvFile(fileInput.files[0]);
+    });
+  }
+
+  function handleCsvFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => mergeCsvContent(e.target.result);
+    reader.readAsText(file);
+  }
+
+  function mergeCsvContent(csvText) {
+    const lines = csvText.split(/\\r?\\n/).filter(l => l.trim().length > 0);
+    if (lines.length < 2) return;
+
+    const headers = lines[0].split(',').map(h => h.replace(/^["'\\s]+|["'\\s]+$/g, '').toLowerCase());
+    const idIdx = headers.indexOf('id');
+    let titleIdx = headers.indexOf('titulo');
+    if (titleIdx === -1) titleIdx = headers.indexOf('title');
+    let imgIdx = headers.indexOf('image_url');
+    if (imgIdx === -1) imgIdx = headers.indexOf('image');
+    let seenIdx = headers.indexOf('visto');
+    if (seenIdx === -1) seenIdx = headers.indexOf('seen');
+
+    if (idIdx === -1) {
+      alert("El archivo CSV no contiene la columna 'id'.");
+      return;
+    }
+
+    const existingIds = new Set(allCards.map(c => c.dataset.id));
+    let newAdded = 0;
+    let duplicates = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const row = [];
+      const re = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^,]*))/g;
+      let m;
+      while ((m = re.exec(lines[i])) !== null) {
+        let val = m[1] !== undefined ? m[1].replace(/""/g, '"') : m[2];
+        row.push((val || '').trim());
+      }
+
+      const vid = row[idIdx] || '';
+      if (!vid) continue;
+
+      const title = (titleIdx !== -1 ? row[titleIdx] : '') || ('Netflix_' + vid);
+      const img = (imgIdx !== -1 ? row[imgIdx] : '') || '';
+      const isSeenVal = (seenIdx !== -1 ? row[seenIdx] : '').toLowerCase();
+      const isSeen = ['1', 'true', 'yes', 'si', 'sí', 'x'].includes(isSeenVal);
+
+      if (existingIds.has(vid)) {
+        duplicates++;
+        if (isSeen) {
+          const existingCard = allCards.find(c => c.dataset.id === vid);
+          if (existingCard) {
+            const chk = existingCard.querySelector('.chk-seen');
+            if (chk && !chk.checked) {
+              chk.checked = true;
+              existingCard.classList.add('seen-card');
+              existingCard.dataset.seen = "true";
+              seenMap[vid] = true;
+            }
+          }
+        }
+      } else {
+        newAdded++;
+        existingIds.add(vid);
+        const newCard = createCardElement({ id: vid, title: title, img: img, visto: isSeen });
+        grid.appendChild(newCard);
+        allCards.push(newCard);
+        if (isSeen) seenMap[vid] = true;
+      }
+    }
+
+    saveSeenMap(seenMap);
+    updateCounters();
+    applyFilters();
+
+    const statusBox = document.getElementById('hubMergeStatus');
+    const summaryBox = document.getElementById('hubMergeSummary');
+    if (statusBox && summaryBox) {
+      statusBox.style.display = 'block';
+      summaryBox.innerHTML = `<strong>¡Fusión exitosa!</strong> +${newAdded} nuevos títulos agregados, ${duplicates} ya existentes actualizados.<br>Total actual en tu lista: <strong>${allCards.length} títulos</strong>.`;
+    }
+    showToast(`🎉 +${newAdded} títulos agregados a tu lista`);
+  }
+
+  document.getElementById('btnDownloadMergedCsv')?.addEventListener('click', () => {
+    btnExport.click();
+  });
+  document.getElementById('btnCopyMergeCmd')?.addEventListener('click', async () => {
+    await navigator.clipboard.writeText('python3 2-merge_csv.py');
+    showToast("📋 Comando 'python3 2-merge_csv.py' copiado");
+  });
+
+  // Tarea 3: Copiar comando de descarga de imágenes
+  document.getElementById('btnCopyDownloadCmd')?.addEventListener('click', async () => {
+    await navigator.clipboard.writeText('python3 3-download_images.py');
+    showToast("📋 Comando 'python3 3-download_images.py' copiado");
+  });
+
+  // Tarea 4: Copiar Script de Importación con IDs embebidos
+  document.getElementById('btnCopyImporter')?.addEventListener('click', async () => {
+    const scope = document.querySelector('input[name="importScope"]:checked')?.value || 'pending';
+    const targetIds = [];
+    allCards.forEach(c => {
+      const isSeen = c.querySelector('.chk-seen')?.checked;
+      const id = c.dataset.id;
+      if (!id) return;
+      if (scope === 'pending') {
+        if (!isSeen) targetIds.push(id);
+      } else {
+        targetIds.push(id);
+      }
+    });
+
+    let code = SCRIPT_IMPORT;
+    const jsonIds = JSON.stringify(targetIds, null, 4);
+    code = code.replace(/const mis_ids = \\\\\\[[\\s\\S]*?\\\\\\];/, `const mis_ids = ${jsonIds};`);
+
+    try {
+      await navigator.clipboard.writeText(code);
+      showToast(`🚀 ¡Script copiado con ${targetIds.length} títulos listos para importar!`);
+    } catch(e) {
+      prompt("Copia el script manualmente:", code);
+    }
+  });
+
   updateCounters();
   sortCards(sortSel.value);
 })();
@@ -576,7 +1109,10 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
 </html>"""
     html = (template
             .replace("__PAGE_TITLE__", _esc_html(page_title))
-            .replace("__CARDS__", "\n".join(card_parts)))
+            .replace("__CARDS__", "\n".join(card_parts))
+            .replace("__SCRIPT_EXPORT_JSON__", json.dumps(export_script, ensure_ascii=False))
+            .replace("__SCRIPT_IMPORT_JSON__", json.dumps(import_script, ensure_ascii=False))
+            .replace("__BOOKMARKLET_URL__", _esc_html(bookmarklet_url)))
     return html
 
 def write_viewer_html(items, out_path: Path, page_title="Netflix My List – Viewer"):

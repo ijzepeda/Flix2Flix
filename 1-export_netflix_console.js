@@ -42,6 +42,50 @@
     // 2. Mapa para acumular títulos únicos (ID -> datos)
     const titlesMap = new Map();
 
+    function extractImageUrl(anchor, videoId) {
+        // 1. Intentar desde el cache de Netflix en memoria (falcorCache / react)
+        try {
+            const fc = window.netflix?.falcorCache;
+            if (fc && fc.videos && fc.videos[videoId]) {
+                const v = fc.videos[videoId];
+                const b = v.boxArt || v.boxart;
+                if (b?.value?.url) return b.value.url;
+                if (typeof b?.url === 'string') return b.url;
+            }
+        } catch (e) {}
+
+        // 2. Buscar tag <img> dentro del enlace o su contenedor de tarjeta
+        let img = anchor.querySelector('img');
+        if (!img) {
+            const card = anchor.closest('[data-uia*="card"], .slider-item, div[class*="cache-1tbetht"]') || anchor.parentElement;
+            if (card) img = card.querySelector('img');
+        }
+
+        if (img) {
+            const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+            if (src && !src.startsWith('data:') && !src.includes('placeholder')) {
+                return src;
+            }
+            const srcset = img.getAttribute('srcset');
+            if (srcset) {
+                const parts = srcset.split(',').map(s => s.trim().split(' ')[0]).filter(Boolean);
+                if (parts.length > 0 && !parts[parts.length - 1].startsWith('data:')) {
+                    return parts[parts.length - 1];
+                }
+            }
+        }
+
+        // 3. Buscar estilo background-image
+        const bgElem = anchor.querySelector('[style*="background-image"]') || 
+                       anchor.closest('[data-uia*="card"]')?.querySelector('[style*="background-image"]');
+        if (bgElem) {
+            const m = bgElem.style.backgroundImage.match(/url\(["']?([^"']+)["']?\)/);
+            if (m && m[1] && !m[1].startsWith('data:')) return m[1];
+        }
+
+        return '';
+    }
+
     function harvestCards() {
         // Enlaces que contienen el ID del título (jbv=, /watch/ o /title/)
         const anchors = targetSection.querySelectorAll('a[href*="jbv="], a[href*="/watch/"], a[href*="/title/"]');
@@ -61,31 +105,40 @@
 
             // Obtener título legible e imagen
             let title = (a.getAttribute('aria-label') || '').trim();
-                const img = a.querySelector('img');
-                let imageUrl = '';
-                if (img) {
-                    if (!title) title = (img.getAttribute('alt') || '').trim();
-                    imageUrl = img.currentSrc || img.src || '';
-                }
-                if (!title) {
-                    const fallback = a.querySelector('.fallback-text, p, span');
-                    if (fallback) title = fallback.textContent.trim();
-                }
-                if (!title) {
-                    title = `Netflix_${videoId}`;
-                }
+            const img = a.querySelector('img');
+            if (img && !title) {
+                title = (img.getAttribute('alt') || '').trim();
+            }
+            if (!title) {
+                const fallback = a.querySelector('.fallback-text, p, span');
+                if (fallback) title = fallback.textContent.trim();
+            }
+            if (!title) {
+                title = `Netflix_${videoId}`;
+            }
 
-                if (!titlesMap.has(videoId)) {
-                    titlesMap.set(videoId, {
-                        title: title,
-                        id: videoId,
-                        url: `https://www.netflix.com/title/${videoId}`,
-                        image_url: imageUrl,
-                        seen: ""
-                    });
-                    newCount++;
+            const imageUrl = extractImageUrl(a, videoId);
+
+            if (titlesMap.has(videoId)) {
+                // Actualizar imagen o título si no estaban disponibles al inicio de la carga diferida (lazy load)
+                const existing = titlesMap.get(videoId);
+                if (!existing.image_url && imageUrl) {
+                    existing.image_url = imageUrl;
                 }
-            });
+                if ((!existing.title || existing.title.startsWith('Netflix_')) && title && !title.startsWith('Netflix_')) {
+                    existing.title = title;
+                }
+            } else {
+                titlesMap.set(videoId, {
+                    title: title,
+                    id: videoId,
+                    url: `https://www.netflix.com/title/${videoId}`,
+                    image_url: imageUrl,
+                    seen: ""
+                });
+                newCount++;
+            }
+        });
 
         return newCount;
     }

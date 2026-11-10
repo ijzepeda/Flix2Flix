@@ -8,7 +8,7 @@
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     function addExportButton() {
@@ -108,21 +108,24 @@
                 if (!videoId) return;
 
                 let title = (a.getAttribute('aria-label') || '').trim();
-                if (!title) {
+                    let imageUrl = '';
                     const img = a.querySelector('img');
-                    if (img) title = (img.getAttribute('alt') || '').trim();
-                }
-                if (!title) title = `Netflix_${videoId}`;
+                    if (img) {
+                        if (!title) title = (img.getAttribute('alt') || '').trim();
+                        imageUrl = img.currentSrc || img.src || '';
+                    }
+                    if (!title) title = `Netflix_${videoId}`;
 
-                if (!titlesMap.has(videoId)) {
-                    titlesMap.set(videoId, {
-                        title: title,
-                        id: videoId,
-                        url: `https://www.netflix.com/title/${videoId}`
-                    });
-                    added++;
-                }
-            });
+                    if (!titlesMap.has(videoId)) {
+                        titlesMap.set(videoId, {
+                            title: title,
+                            id: videoId,
+                        url: `https://www.netflix.com/title/${videoId}`,
+                            image_url: imageUrl
+                        });
+                        added++;
+                    }
+                });
             return added;
         }
 
@@ -151,10 +154,11 @@
         const items = Array.from(titlesMap.values());
         if (items.length === 0) throw new Error("No items found");
 
-        const csvRows = ['"title","id","url","seen"'];
+        const csvRows = ['"title","id","url","seen","image_url"'];
         items.forEach(it => {
             const cleanTitle = it.title.replace(/"/g, '""');
-            csvRows.push(`"${cleanTitle}","${it.id}","${it.url}",""`);
+            const cleanImg = (it.image_url || '').replace(/"/g, '""');
+            csvRows.push(`"${cleanTitle}","${it.id}","${it.url}","","${cleanImg}"`);
         });
 
         const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });

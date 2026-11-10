@@ -544,8 +544,8 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
       const visto = chk && chk.checked ? "1" : "";
       rows.push(['"'+title+'"', id, '"'+url+'"', '"'+img+'"', visto].join(","));
     });
-    const csv = rows.join("\n");
-    const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+    const csv = rows.join("\\n");
+    const blob = new Blob(["\\ufeff" + csv], {type:"text/csv;charset=utf-8"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = "netflix_mylist_actualizado.csv";

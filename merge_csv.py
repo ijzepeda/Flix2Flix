@@ -19,7 +19,36 @@ from netflix_mylist_to_csv_and_viewer_spanish import (
     write_viewer_html,
 )
 
-def normalize_row(row: dict) -> dict:
+def build_image_cache() -> dict:
+    """
+    Compila un mapa de ID -> image_url a partir de todos los respaldos existentes.
+    Permite restaurar las portadas aunque un archivo intermedio las haya omitido.
+    """
+    cache = {}
+    sources = [
+        Path("netflix_mylist.csv"),
+        Path("netflix_mylist_actualizado.csv"),
+    ]
+    backups_dir = Path("BACKUPS")
+    if backups_dir.exists():
+        sources.extend(sorted(backups_dir.glob("*.csv")))
+
+    for p in sources:
+        if not p.exists():
+            continue
+        try:
+            with p.open("r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    vid = str(row.get("id") or "").strip()
+                    img = str(row.get("image_url") or row.get("image") or "").strip()
+                    if vid and img and vid not in cache:
+                        cache[vid] = img
+        except Exception:
+            continue
+    return cache
+
+def normalize_row(row: dict, image_cache: dict = None) -> dict:
     vid = str(row.get("id") or "").strip()
     titulo = (row.get("titulo") or row.get("title") or "").strip()
     if not titulo:
@@ -29,6 +58,10 @@ def normalize_row(row: dict) -> dict:
     if not url and vid:
         url = f"https://www.netflix.com/title/{vid}"
 
+    image_url = (row.get("image_url") or row.get("image") or "").strip()
+    if not image_url and image_cache and vid in image_cache:
+        image_url = image_cache[vid]
+
     visto_val = str(row.get("visto") or row.get("seen") or "").strip().lower()
     visto = "1" if visto_val in ("1", "true", "yes", "si", "sí", "x") else ""
 
@@ -36,10 +69,11 @@ def normalize_row(row: dict) -> dict:
     item["id"] = vid
     item["titulo"] = titulo
     item["url"] = url
+    item["image_url"] = image_url
     item["visto"] = visto
     return item
 
-def merge_csv_files(base_path: Path, new_path: Path) -> tuple[list, dict]:
+def merge_csv_files(base_path: Path, new_path: Path, image_cache: dict = None) -> tuple[list, dict]:
     merged = {}
     order = []
 
@@ -48,7 +82,7 @@ def merge_csv_files(base_path: Path, new_path: Path) -> tuple[list, dict]:
         with base_path.open("r", encoding="utf-8-sig", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                item = normalize_row(row)
+                item = normalize_row(row, image_cache=image_cache)
                 vid = item["id"]
                 if vid:
                     merged[vid] = item
@@ -65,7 +99,7 @@ def merge_csv_files(base_path: Path, new_path: Path) -> tuple[list, dict]:
         with new_path.open("r", encoding="utf-8-sig", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                item = normalize_row(row)
+                item = normalize_row(row, image_cache=image_cache)
                 vid = item["id"]
                 if not vid:
                     continue
@@ -78,13 +112,21 @@ def merge_csv_files(base_path: Path, new_path: Path) -> tuple[list, dict]:
                     # Si el nuevo tiene título más descriptivo, actualizarlo
                     if (not merged[vid]["titulo"] or merged[vid]["titulo"].startswith("Netflix_")) and item["titulo"]:
                         merged[vid]["titulo"] = item["titulo"]
-                    # Conservar imagen si la base la tiene
-                    if not merged[vid].get("image_url") and item.get("image_url"):
-                        merged[vid]["image_url"] = item["image_url"]
+                    # Conservar imagen si la base la tiene o el nuevo la trae
+                    if not merged[vid].get("image_url"):
+                        if item.get("image_url"):
+                            merged[vid]["image_url"] = item["image_url"]
+                        elif image_cache and vid in image_cache:
+                            merged[vid]["image_url"] = image_cache[vid]
                 else:
                     new_added += 1
                     merged[vid] = item
                     order.append(vid)
+
+    # Asegurar que todas las imágenes posibles estén pobladas
+    for vid, it in merged.items():
+        if not it.get("image_url") and image_cache and vid in image_cache:
+            it["image_url"] = image_cache[vid]
 
     # Lista final en orden respetando originales + nuevos
     final_items = [merged[vid] for vid in order]
@@ -96,6 +138,7 @@ def merge_csv_files(base_path: Path, new_path: Path) -> tuple[list, dict]:
         "new_duplicates": new_duplicates,
         "total": len(final_items),
         "total_seen": sum(1 for x in final_items if x["visto"] == "1"),
+        "total_images": sum(1 for x in final_items if bool(x.get("image_url"))),
     }
     return final_items, stats
 
@@ -137,7 +180,11 @@ def main():
     print(f"📂 Archivo base: {base_file}")
     print(f"📥 Archivo nuevo: {new_file}")
 
-    items, stats = merge_csv_files(base_file, new_file)
+    image_cache = build_image_cache()
+    if image_cache:
+        print(f"🖼️  Portadas cargadas desde respaldos: {len(image_cache)}")
+
+    items, stats = merge_csv_files(base_file, new_file, image_cache=image_cache)
 
     # Escribir CSV actualizado
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -155,6 +202,9 @@ def main():
     print(f"- Nuevos títulos agregados:    +{stats['new_added']}")
     print(f"- Coincidentes actualizados:    {stats['new_duplicates']}")
     print(f"- TOTAL EN TU LISTA:            {stats['total']} títulos ({stats['total_seen']} vistos)")
+    print(f"- Títulos con portada:          {stats['total_images']} / {stats['total']}")
+    if stats['total'] - stats['total_images'] > 0:
+        print(f"- Títulos con póster temático:  {stats['total'] - stats['total_images']} (placeholders 🍿)")
     print(f"\n💾 CSV guardado en:      {args.out.resolve()}")
     print(f"🌐 Visor actualizado en:  {args.viewer_out.resolve()}")
     print("=" * 50 + "\n")

@@ -50,10 +50,10 @@
         anchors.forEach(a => {
             const href = a.getAttribute('href') || '';
             let videoId = '';
-            
+
             const mJbv = href.match(/jbv=(\d+)/);
             const mPath = href.match(/\/(?:watch|title)\/(\d+)/);
-            
+
             if (mJbv) videoId = mJbv[1];
             else if (mPath) videoId = mPath[1];
 
@@ -61,31 +61,31 @@
 
             // Obtener título legible e imagen
             let title = (a.getAttribute('aria-label') || '').trim();
-            const img = a.querySelector('img');
-            let imageUrl = '';
-            if (img) {
-                if (!title) title = (img.getAttribute('alt') || '').trim();
-                imageUrl = img.currentSrc || img.src || '';
-            }
-            if (!title) {
-                const fallback = a.querySelector('.fallback-text, p, span');
-                if (fallback) title = fallback.textContent.trim();
-            }
-            if (!title) {
-                title = `Netflix_${videoId}`;
-            }
+                const img = a.querySelector('img');
+                let imageUrl = '';
+                if (img) {
+                    if (!title) title = (img.getAttribute('alt') || '').trim();
+                    imageUrl = img.currentSrc || img.src || '';
+                }
+                if (!title) {
+                    const fallback = a.querySelector('.fallback-text, p, span');
+                    if (fallback) title = fallback.textContent.trim();
+                }
+                if (!title) {
+                    title = `Netflix_${videoId}`;
+                }
 
-            if (!titlesMap.has(videoId)) {
-                titlesMap.set(videoId, {
-                    title: title,
-                    id: videoId,
-                    url: `https://www.netflix.com/title/${videoId}`,
-                    image_url: imageUrl,
-                    seen: ""
-                });
-                newCount++;
-            }
-        });
+                if (!titlesMap.has(videoId)) {
+                    titlesMap.set(videoId, {
+                        title: title,
+                        id: videoId,
+                        url: `https://www.netflix.com/title/${videoId}`,
+                        image_url: imageUrl,
+                        seen: ""
+                    });
+                    newCount++;
+                }
+            });
 
         return newCount;
     }
@@ -105,12 +105,12 @@
 
         while (stagnation < 4 && step < maxSteps) {
             step++;
-            
+
             // Verificar si el botón está deshabilitado o invisible
-            const isDisabled = btnRight.getAttribute('aria-disabled') === 'true' || 
-                               btnRight.getAttribute('tabindex') === '-1' || 
-                               btnRight.disabled ||
-                               btnRight.offsetParent === null;
+            const isDisabled = btnRight.getAttribute('aria-disabled') === 'true' ||
+                btnRight.getAttribute('tabindex') === '-1' ||
+                btnRight.disabled ||
+                btnRight.offsetParent === null;
 
             if (isDisabled && stagnation > 1) {
                 console.log("⏹️ Fin del carrusel alcanzado (botón desactivado).");

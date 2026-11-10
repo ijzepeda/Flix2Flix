@@ -188,13 +188,26 @@ def build_simple_viewer_html(items, page_title="Netflix My List – Viewer"):
         base = _derive_base(watch_url, "https://www.netflix.com")
         title_url = _esc_html(urljoin(base, "/title/" + vid)) if vid else ""
 
+        # Verificar si existe imagen en caché local ./imagenes/
+        local_src = ""
+        if vid:
+            for ext in (".jpg", ".webp", ".png", ".jpeg"):
+                cand = Path("imagenes") / f"{vid}{ext}"
+                if cand.exists():
+                    local_src = f"imagenes/{vid}{ext}"
+                    break
+
+        img_src = local_src if local_src else image
+
         card = []
         card.append(f'<div class="card{" seen-card" if visto=="true" else ""}" data-title="{title}" data-rank="{rank}" data-id="{vid}" data-seen="{visto}" data-img="{image}">')
         
-        # Imagen con soporte de referrerpolicy y placeholder de fallback
+        # Imagen con soporte de referrerpolicy, caché local y fallback
         card.append('  <div class="poster-container">')
-        if image:
-            card.append(f'    <img class="poster" src="{image}" alt="{title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">')
+        if img_src:
+            fallback_attr = f' data-fallback="{image}"' if (local_src and image) else ''
+            onerror_code = "if(this.dataset.fallback && this.src !== this.dataset.fallback){ this.src = this.dataset.fallback; } else { this.style.display=\\'none\\'; this.nextElementSibling.style.display=\\'flex\\'; }"
+            card.append(f'    <img class="poster" src="{img_src}"{fallback_attr} alt="{title}" loading="lazy" referrerpolicy="no-referrer" onerror="{onerror_code}">')
             card.append(f'    <div class="poster-placeholder" style="display:none;"><span class="placeholder-icon">🎬</span><span class="placeholder-title">{title}</span></div>')
         else:
             card.append(f'    <div class="poster-placeholder"><span class="placeholder-icon">🍿</span><span class="placeholder-title">{title}</span></div>')
